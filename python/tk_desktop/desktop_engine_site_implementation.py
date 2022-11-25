@@ -207,6 +207,9 @@ class DesktopEngineSiteImplementation(object):
         self.site_comm.register_function(
             self.project_commands_finished, "project_commands_finished"
         )
+        self.site_comm.register_function(
+            self.update_banners, "update_banners"
+        )
 
     def engine_startup_error(self, exception_type, exception_str, tb=None):
         """
@@ -216,6 +219,7 @@ class DesktopEngineSiteImplementation(object):
         :param str exception_str: Text of the exception that was raised during bootstrap.
         :param tb: Traceback of the exception raised during bootstrap.
         """
+
         self.desktop_window.engine_startup_error(exception_type, exception_str, tb)
 
     def bootstrap_progress_callback(self, value, msg):
@@ -235,6 +239,31 @@ class DesktopEngineSiteImplementation(object):
         # Clear the UI, we can't launch anything anymore!
         self.desktop_window.clear_app_uis()
 
+    def update_banners(self, banner_message=None, banner_id=None):
+        """
+        A workaround live banner updating caller that sets the engine settings
+        live. This will only be called if project specific functions use the env vars
+        SGTK_DESKTOP_PROJECT_BANNER_MESSAGE, SGTK_DESKTOP_PROJECT_BANNER_ID to set them
+        for triggering their update to view them.
+
+        This method can be called directly from commands in the project panes upon being clicked if
+        you utilize:
+
+        >> self.engine._project_comm.call_no_response("update_banners", "banner message here , "optional banner id here")
+        """
+
+        settings = self._engine.settings
+        if not banner_id:
+            import uuid
+            banner_id = str(uuid.uuid4())
+
+        settings['banner_id'] = banner_id
+        settings['banner_message'] = banner_message
+        self._engine._set_settings(settings)
+
+        self._engine.log_info("Forcing banner update...")
+        self.desktop_window._update_banners()
+
     def _on_proxy_created(self):
         """
         Invoked when background process has created proxy
@@ -250,7 +279,7 @@ class DesktopEngineSiteImplementation(object):
         self._collapse_rules = collapse_rules
 
     def trigger_register_command(self, name, properties, groups):
-        """GUI side handler for the add_command call."""
+        """ GUI side handler for the add_command call. """
         from tank.platform.qt import QtGui
 
         logger.debug("register_command(%s, %s)", name, properties)
@@ -347,7 +376,7 @@ class DesktopEngineSiteImplementation(object):
         self.desktop_window.on_project_commands_finished()
 
     def _handle_button_command_triggered(self, name):
-        """Button clicked from a registered command."""
+        """ Button clicked from a registered command. """
         self.refresh_user_credentials()
         # Make sure the string is a str and not unicode. This happens in
         # Python 2.7.
